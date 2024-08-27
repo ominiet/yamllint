@@ -125,7 +125,7 @@ class Format:
 
         return json.dumps(line)
 
-def show_problems(problems, file, args_format, no_warn):
+def show_problems(problems, file, args_format, no_warn, first_problem=False):
     max_level = 0
     first = True
 
@@ -135,9 +135,6 @@ def show_problems(problems, file, args_format, no_warn):
             args_format = 'github'
         elif supports_color():
             args_format = 'colored'
-
-    if args_format == 'json' or args_format == "code-climate":
-        print('[', end='')
 
     for problem in problems:
         max_level = max(max_level, PROBLEM_LEVELS[problem.level])
@@ -158,12 +155,16 @@ def show_problems(problems, file, args_format, no_warn):
         elif args_format == 'json':
             if first:
                 first = False
+                if not first_problem:
+                    print(',', end='')
             else:
                 print(',', end='')
             print('\n  ' + Format.json(problem, file), end='')
         elif args_format == 'code-climate':
             if first:
                 first = False
+                if not first_problem:
+                    print(',', end='')
             else:
                 print(',', end='')
             print('\n  ' + 
@@ -177,10 +178,10 @@ def show_problems(problems, file, args_format, no_warn):
     if not first and args_format == 'github':
         print('::endgroup::')
 
-    if args_format == 'json' or args_format == 'code-climate':
-        print('\n]', end='')
+    # if args_format == 'json' or args_format == 'code-climate':
+    #     print('\n]', end='')
 
-    if not first and args_format != 'parsable':
+    if not first and not (args_format in ['parsable', 'json', 'code-climate']):
         print('')
 
     return max_level
@@ -272,6 +273,10 @@ def run(argv=None):
 
     max_level = 0
 
+    if args.format in ['json', 'code-climate'] and not args.stdin:
+        first_problem = True
+        print('[', end='')
+
     for file in find_files_recursively(args.files, conf):
         filepath = file[2:] if file.startswith('./') else file
         try:
@@ -280,9 +285,21 @@ def run(argv=None):
         except OSError as e:
             print(e, file=sys.stderr)
             sys.exit(-1)
-        prob_level = show_problems(problems, file, args_format=args.format,
-                                   no_warn=args.no_warnings)
+        if args.format in ['json', 'code-climate'] and not args.stdin:
+            prob_level = show_problems(problems, file,
+                                       args_format=args.format,
+                                       no_warn=args.no_warnings,
+                                       first_problem=first_problem)
+            if first_problem:
+                first_problem = prob_level == 0
+        else:
+            prob_level = show_problems(problems, file,
+                                       args_format=args.format,
+                                       no_warn=args.no_warnings)
         max_level = max(max_level, prob_level)
+
+    if args.format in ['json', 'code-climate'] and not args.stdin:
+        print('\n]')
 
     # read yaml from stdin
     if args.stdin:
