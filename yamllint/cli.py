@@ -19,6 +19,7 @@ import locale
 import os
 import platform
 import sys
+import hashlib
 
 from yamllint import APP_DESCRIPTION, APP_NAME, APP_VERSION, linter
 from yamllint.config import YamlLintConfig, YamlLintConfigError
@@ -99,6 +100,30 @@ class Format:
             'rule': problem.rule,
         })
 
+    @staticmethod
+    def code_climate(problem, filename):
+        line =  {
+            'type': 'issue',
+            'check_name': problem.rule,
+            'description': problem.desc,
+            'categories': ['Style'],
+            'severity': 'major' if problem.level == "error" else "minor",
+            'location': {
+                'path': filename,
+                'positions': {
+                    'begin': {
+                        'line': problem.line,
+                        'column': problem.column
+                    }
+                }
+            }
+        }
+
+        line_hash = hashlib.md5(json.dumps(line).encode('utf-8'))
+
+        line['fingerprint'] = line_hash.hexdigest()
+
+        return json.dumps(line)
 
 def show_problems(problems, file, args_format, no_warn):
     max_level = 0
@@ -111,7 +136,7 @@ def show_problems(problems, file, args_format, no_warn):
         elif supports_color():
             args_format = 'colored'
 
-    if args_format == 'json':
+    if args_format == 'json' or args_format == "code-climate":
         print('[', end='')
 
     for problem in problems:
@@ -136,6 +161,13 @@ def show_problems(problems, file, args_format, no_warn):
             else:
                 print(',', end='')
             print('\n  ' + Format.json(problem, file), end='')
+        elif args_format == 'code-climate':
+            if first:
+                first = False
+            else:
+                print(',', end='')
+            print('\n  ' + 
+                  Format.code_climate(problem, file), end= '')
         else:
             if first:
                 print(file)
@@ -145,7 +177,7 @@ def show_problems(problems, file, args_format, no_warn):
     if not first and args_format == 'github':
         print('::endgroup::')
 
-    if args_format == 'json':
+    if args_format == 'json' or args_format == 'code-climate':
         print('\n]', end='')
 
     if not first and args_format != 'parsable':
@@ -187,7 +219,7 @@ def run(argv=None):
                         help='list files to lint and exit')
     parser.add_argument('-f', '--format',
                         choices=('parsable', 'standard', 'colored', 'github',
-                                 'json', 'auto'),
+                                 'json', 'code-climate','auto'),
                         default='auto', help='format for parsing output')
     parser.add_argument('-s', '--strict',
                         action='store_true',
