@@ -278,7 +278,7 @@ def run(argv=None):
         print('[', end='')
 
     for file in find_files_recursively(args.files, conf):
-        filepath = file[2:] if file.startswith('./') else file
+        filepath = file.removeprefix('./')
         try:
             with open(file, newline='') as f:
                 problems = linter.run(f, conf, filepath)
